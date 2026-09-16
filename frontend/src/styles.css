@@ -1153,6 +1153,31 @@ select {
   gap: 6px;
 }
 
+.state-select {
+  display: block;
+  width: 100%;
+}
+
+.state-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: oklch(0.97 0.006 95);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.06);
+  cursor: pointer;
+}
+
+.state-select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

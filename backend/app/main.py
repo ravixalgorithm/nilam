@@ -16,9 +16,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Crop Recommendation API",
-    version="2.0.0",
-    description="Predicts the best crop from soil, climate and season inputs (Tamil Nadu crop dataset, 57 crops).",
+    title="NILAM Crop Recommendation API",
+    version="3.0.0",
+    description="Generalized crop recommendations for Indian fields (16 states) from soil, climate, season and location.",
     lifespan=lifespan,
 )
 
@@ -50,16 +50,18 @@ def metadata() -> dict:
 @app.get("/model-info")
 def model_info() -> dict[str, object]:
     return {
-        "model": "RandomForestClassifier (one-hot soil/season/water source)",
+        "model": "RandomForestClassifier (one-hot soil/season/state)",
         "features": NUMERIC + CATEGORICAL,
         "crops": len(model_service.metadata.get("crops", {})),
         "training_rows": model_service.metadata.get("rows"),
+        "states": len(model_service.metadata.get("options", {}).get("state", [])),
         "metrics": model_service.metrics,
-        "dataset": "Crop recommendation dataset for Tamil Nadu (Mendeley Data, doi:10.17632/vynxnppr7j.1, CC BY 4.0)",
+        "dataset": "Multi-state India crop recommendation set (16 states, synthetic from Indian agro references)",
+        "coverage": model_service.metadata.get("coverage"),
     }
 
 
 @app.get("/dataset")
 def dataset(limit: int = 80, offset: int = 0, crop: str | None = None) -> dict:
-    """Paginated sample of the Tamil Nadu training rows for the raw-data viewer."""
+    """Paginated sample of the India multi-state training rows for the raw-data viewer."""
     return model_service.sample_dataset(limit=limit, offset=offset, crop=crop or None)

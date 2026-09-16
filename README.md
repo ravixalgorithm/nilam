@@ -1,9 +1,9 @@
 # NILAM
 
-**Crop recommendation for Tamil Nadu fields** — enter soil and climate readings, get ranked crop fits with confidence, calendars, and growing profiles.
+**Generalized crop recommendation for Indian fields** — pick a state, enter soil and climate readings, get ranked crop fits with confidence, calendars, and growing profiles.
 
 <p align="center">
-  <img src="docs/dashboard.png" alt="NILAM dashboard — rice analysis with confidence, crop ranking, and field readings" width="100%" />
+  <img src="docs/dashboard.png" alt="NILAM dashboard — crop analysis with confidence, ranking, and field readings" width="100%" />
 </p>
 
 <p align="center">
@@ -11,16 +11,16 @@
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" />
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white" />
-  <img alt="License data" src="https://img.shields.io/badge/Dataset-CC%20BY%204.0-lightgrey?style=flat-square" />
+  <img alt="Coverage" src="https://img.shields.io/badge/Coverage-16%20Indian%20states-2e7d32?style=flat-square" />
 </p>
 
 ---
 
 ## Overview
 
-NILAM is a full-stack advisor for matching a field’s conditions to crops. A Random Forest model trained on **57 crops / 57,000 rows** of Tamil Nadu agricultural data ranks candidates from NPK, pH, temperature, humidity, seasonal water, soil type, season, and water source.
+NILAM is a full-stack advisor for matching field conditions to crops **across India**. A Random Forest model trained on a **multi-state** dataset (16 states · 25 crops · 8,000 rows) ranks candidates from NPK, pH, temperature, humidity, rainfall, soil type, season, and **state**.
 
-The UI is built like a floated desktop app: dark sidebar, Chrome-style tabs, hatch-framed metric shells, live rankings, and a raw dataset viewer.
+The UI is a floated desktop-style app: dark sidebar, Chrome-style tabs, hatch-framed metric shells, live rankings, and a raw dataset viewer.
 
 **Docs:** [Project documentation](docs/PROJECT.md) · [UI design system](frontend/DESIGN.md)
 
@@ -28,23 +28,25 @@ The UI is built like a floated desktop app: dark sidebar, Chrome-style tabs, hat
 |-------|--------|
 | Frontend | React 18, Vite, Iconsax, Plus Jakarta Sans |
 | Backend | FastAPI, scikit-learn, pandas, joblib |
-| Model | RandomForest (200 trees), one-hot soil / season / water source |
-| Data | Tamil Nadu crop recommendation set ([Mendeley](https://data.mendeley.com/datasets/vynxnppr7j/1), CC BY 4.0) |
+| Model | RandomForest (200 trees), one-hot soil / season / state |
+| Data | Multi-state India crop set (synthetic from Indian agro references) |
 
-> **Note:** The training set is synthetic (CTGAN from regional references). Reported accuracy is for demo / coursework — not field validation.
+> **Note:** Training rows are synthetic (generated from state-wise soil/climate/crop suitability ranges). Metrics are for demo / coursework — not farm-validated agronomy advice.
+
+**States covered:** Andhra Pradesh, Assam, Bihar, Gujarat, Haryana, Karnataka, Kerala, Madhya Pradesh, Maharashtra, Odisha, Punjab, Rajasthan, Tamil Nadu, Telangana, Uttar Pradesh, West Bengal.
 
 ---
 
 ## Features
 
-- **Live recommendations** — results update as soon as every reading is set  
+- **State-aware recommendations** — location is a model feature, not just a label  
+- **Live results** — update as soon as every reading is set  
 - **Confidence & fit** — top pick with %, reading marks, soil match, sow/harvest window  
-- **Crop ranking** — model pick first, then same-season crops scored by how many readings sit in typical range  
+- **Crop ranking** — model pick plus same-season alternatives by in-range fit  
 - **Growing calendar** — sow / grow / harvest months per crop  
-- **Field panel** — season, soil chips, craft sliders for nutrients & climate  
-- **Saved analyses** — sidebar history (browser `localStorage`)  
-- **Raw data viewer** — open **57 crops · 57,000 records** for a paginated look at training rows  
-- **Design system** — see [`frontend/DESIGN.md`](frontend/DESIGN.md)
+- **Field panel** — state, season, soil chips, craft sliders  
+- **Saved analyses** — sidebar history (`localStorage`)  
+- **Raw data viewer** — browse training rows from the sidebar footer  
 
 ---
 
@@ -54,7 +56,6 @@ The UI is built like a floated desktop app: dark sidebar, Chrome-style tabs, hat
 
 - Python **3.10+**
 - Node.js **18+** and npm
-- Git
 
 ### Clone
 
@@ -73,15 +74,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-On first run the API trains (or loads) the model and writes `backend/models/`.
+First boot trains (or loads) `backend/models/crop_model_india_v1.joblib`.
 
 | URL | Purpose |
 |-----|---------|
 | http://127.0.0.1:8000/docs | Swagger |
-| http://127.0.0.1:8000/health | Health |
-| http://127.0.0.1:8000/metadata | Fields, options, crop profiles |
-| http://127.0.0.1:8000/model-info | Metrics & feature list |
-| http://127.0.0.1:8000/dataset | Paginated raw rows |
+| http://127.0.0.1:8000/metadata | Fields, states, crop profiles |
+| http://127.0.0.1:8000/model-info | Metrics |
+| http://127.0.0.1:8000/dataset | Paginated training rows |
 
 ### Frontend
 
@@ -93,61 +93,27 @@ npm run dev
 
 Open **http://127.0.0.1:5173**
 
-Optional `frontend/.env`:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-### Windows one-click
-
-From the repo root: `start_all.bat` (or `start_backend.bat` / `start_frontend.bat`).
-
 ---
 
-## How to use
-
-1. Click **New analysis** (or use a sample tile such as Rice on the empty state).  
-2. Set **season**, **soil**, **water source**, and drag/type each nutrient & climate reading.  
-3. Watch the left workspace: confidence bento, calendar, and ranked crop list.  
-4. Open a crop for profile detail; save from the tab flow to keep it in the sidebar.  
-5. Click the footer **57 crops · 57,000 records** to browse training data.
-
----
-
-## API
-
-### Predict
+## API example
 
 `POST /predict`
 
 ```json
 {
   "N": 90,
-  "P": 50,
-  "K": 50,
+  "P": 40,
+  "K": 40,
   "ph": 6.5,
-  "temperature": 30,
-  "humidity": 70,
-  "water": 1705,
+  "temperature": 28,
+  "humidity": 80,
+  "water": 1200,
   "soil": "Alluvial",
   "season": "kharif",
-  "water_source": "irrigated"
+  "water_source": "irrigated",
+  "state": "Punjab"
 }
 ```
-
-```json
-{
-  "best_crop": "rice",
-  "top_recommendations": [
-    { "crop": "rice", "confidence": 0.99 },
-    { "crop": "sorghum", "confidence": 0.01 }
-  ]
-}
-```
-
-Soil values: `Alluvial`, `Black`, `Clay`, `Laterite`, `Loamy`, `Red`, `Sandy`, `Sandy loam`, `Other`  
-Season: `kharif`, `rabi`, `zaid` · Water: `irrigated`, `rainfed`
 
 ---
 
@@ -155,15 +121,12 @@ Season: `kharif`, `rabi`, `zaid` · Water: `irrigated`, `rainfed`
 
 | Item | Detail |
 |------|--------|
-| Dataset | 57 crops × 1,000 rows (Tamil Nadu crop recommendation) |
-| Features | N, P, K, soil pH, temp, RH, seasonal water, soil, season, water source |
-| Held-out | ~99.3% accuracy · 100% top-3 (see `GET /model-info`) |
-| Preprocessing | 34 soil labels → 9 groups; crop identity columns not used as inputs |
+| File | `backend/data/india_crops.csv` |
+| Scale | ~8,000 rows · 25 crops · 16 states |
+| Features | N, P, K, pH, temp, RH, rainfall, soil, season, **state** |
+| Held-out | See live `GET /model-info` (top-3 typically ≫ single-label accuracy) |
 
-Source: [doi:10.17632/vynxnppr7j.1](https://data.mendeley.com/datasets/vynxnppr7j/1) (CC BY 4.0).  
-Reference CSV `backend/data/Crop_recommendation.csv` (22-crop classic set) is kept for the notebook only.
-
-Exploration notebook: [`notebooks/Crop_Recommendation_Testing_Final.ipynb`](notebooks/Crop_Recommendation_Testing_Final.ipynb)
+Source construction: multi-state synthetic samples aligned to Indian state agro references (soil ranges, climate bands, major crops). The earlier Tamil Nadu Mendeley CSV remains under `backend/data/tamilnadu_crops.csv` for reference only.
 
 ---
 
@@ -172,38 +135,22 @@ Exploration notebook: [`notebooks/Crop_Recommendation_Testing_Final.ipynb`](note
 ```text
 nilam/
 ├── backend/
-│   ├── app/                 # FastAPI + model service
-│   ├── data/                # Tamil Nadu CSV (+ legacy CSV)
-│   ├── models/              # joblib artifact (generated)
-│   └── requirements.txt
+│   ├── app/           # FastAPI + India model service
+│   ├── data/          # india_crops.csv (+ archived TN CSV)
+│   └── models/        # crop_model_india_v1.joblib (generated)
 ├── frontend/
-│   ├── src/                 # React app (App, Slider, styles)
-│   ├── DESIGN.md            # UI craft / design system
-│   └── package.json
+│   ├── src/
+│   └── DESIGN.md
 ├── docs/
-│   ├── dashboard.png        # README screenshot
-│   └── PROJECT.md           # Detailed architecture & API docs
-├── notebooks/
-├── start_*.bat
+│   ├── dashboard.png
+│   └── PROJECT.md
 └── README.md
 ```
 
 ---
 
-## Design
-
-Interface language (tokens, chrome, hatch shells, bento, motion) is documented in **[frontend/DESIGN.md](frontend/DESIGN.md)** so new screens stay consistent with NILAM.
-
----
-
 ## License & attribution
 
-Application code in this repository is provided for education and demonstration.
+Application code is for education and demonstration.
 
-Training data © contributors of the Tamil Nadu crop recommendation dataset on Mendeley, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-
----
-
-<p align="center">
-  <strong>NILAM</strong> · land · field · fit
-</p>
+Training data is a synthetic multi-state India crop set derived from public agro reference patterns; treat outputs as illustrative.

@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Add, Award, Calendar as CalendarIcon, Chart, ClipboardText, CloseCircle, CloudSunny, Drop, InfoCircle, Layer, PercentageCircle, StatusUp, TaskSquare, TickCircle, Warning2 } from 'iconsax-react';
+import { Add, Award, Calendar as CalendarIcon, Chart, ClipboardText, CloseCircle, CloudSunny, Drop, InfoCircle, Layer, Location, PercentageCircle, StatusUp, TaskSquare, TickCircle, Warning2 } from 'iconsax-react';
 import Slider from './Slider';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-const STORAGE_KEY = 'hfs.saved-analyses.v1';
-const ACTIVE_KEY = 'hfs.active-analysis.v1';
+const STORAGE_KEY = 'nilam.saved-analyses.v2';
+const ACTIVE_KEY = 'nilam.active-analysis.v2';
 
 const NUTRIENTS = ['N', 'P', 'K', 'ph'];
-const SAMPLES = ['rice', 'ragi', 'groundnut', 'sugarcane', 'tomato', 'wheat'];
+const SAMPLES = ['rice', 'wheat', 'cotton', 'maize', 'sugarcane', 'groundnut'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SEASONS = {
   kharif: { name: 'Kharif', months: 'Jun–Oct' },
@@ -17,8 +17,8 @@ const SEASONS = {
 };
 // Approximate field colour of each soil, so the picker reads like a soil chart.
 const SOIL_COLORS = {
-  Alluvial: '#a3906f', Black: '#3b3531', Clay: '#8c5b3e', Laterite: '#a2452b', Loamy: '#5f4633',
-  Red: '#b4513a', Sandy: '#d9c49b', 'Sandy loam': '#b09a74', Other: null,
+  Alluvial: '#a3906f', Black: '#3b3531', Clay: '#8c5b3e', Laterite: '#a2452b',
+  Red: '#b4513a', Sandy: '#d9c49b', Saline: '#c4b89a', Other: null,
 };
 const SHORT = { N: 'N', P: 'P', K: 'K', ph: 'pH', temperature: '°C', humidity: 'RH', water: 'H₂O' };
 const MAX_ROWS = 8;
@@ -31,7 +31,13 @@ const range = (lo, hi, unit) => withUnit(round(lo) === round(hi) ? round(lo) : `
 const shortDate = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const formKey = (form) => JSON.stringify(form);
 
-const emptyForm = (meta) => ({ ...Object.fromEntries(meta.fields.map((f) => [f.key, ''])), soil: '', season: '', water_source: '' });
+const emptyForm = (meta) => ({
+  ...Object.fromEntries(meta.fields.map((f) => [f.key, ''])),
+  soil: '',
+  season: '',
+  water_source: '',
+  state: '',
+});
 
 function sampleValues(meta, id) {
   const crop = meta.crops[id];
@@ -40,6 +46,7 @@ function sampleValues(meta, id) {
     soil: crop.soils.find((s) => s !== 'Other') ?? crop.soils[0],
     season: crop.season,
     water_source: crop.water_source,
+    state: crop.states?.[0] ?? meta.options.state?.[0] ?? '',
   };
 }
 
@@ -211,8 +218,8 @@ function Dashboard({ meta }) {
 
   const { form } = current;
   const numericDone = meta.fields.filter((f) => form[f.key] !== '' && !Number.isNaN(Number(form[f.key]))).length;
-  const choicesDone = ['soil', 'season', 'water_source'].filter((k) => form[k]).length;
-  const totalInputs = meta.fields.length + 3;
+  const choicesDone = ['soil', 'season', 'water_source', 'state'].filter((k) => form[k]).length;
+  const totalInputs = meta.fields.length + 4;
   const complete = numericDone + choicesDone === totalInputs;
 
   const setForm = (update) => setCurrent((c) => ({ ...c, form: typeof update === 'function' ? update(c.form) : update }));
@@ -255,6 +262,7 @@ function Dashboard({ meta }) {
             soil: form.soil,
             season: form.season,
             water_source: form.water_source,
+            state: form.state,
           }),
           signal: controller.signal,
         });
@@ -297,7 +305,9 @@ function Dashboard({ meta }) {
   const seasonName = result ? SEASONS[result.form.season]?.name ?? result.form.season : '';
 
   // Autosave whenever a ready recommendation exists (and when the name changes).
-  const autoName = pick ? `${meta.crops[pick.crop].name.replace(/ \(.*\)$/, '')} · ${seasonName} · ${result.form.soil}` : 'Untitled analysis';
+  const autoName = pick
+    ? `${meta.crops[pick.crop].name.replace(/ \(.*\)$/, '')} · ${seasonName} · ${result.form.state || result.form.soil}`
+    : 'Untitled analysis';
   const displayName = current.name || autoName;
 
   useEffect(() => {
@@ -642,6 +652,28 @@ function Dashboard({ meta }) {
             <section className="input-tile">
               <header className="bento-head">
                 <span className="bento-ico" aria-hidden="true">
+                  <Location size={16} variant="Bold" color="currentColor" />
+                </span>
+                <span className="bento-label">State</span>
+              </header>
+              <div className="input-well">
+                <label className="state-select">
+                  <span className="visually-hidden">State</span>
+                  <select value={form.state} onChange={(e) => set('state', e.target.value)}>
+                    <option value="">Select state</option>
+                    {(meta.options.state ?? []).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section className="input-tile">
+              <header className="bento-head">
+                <span className="bento-ico" aria-hidden="true">
                   <CalendarIcon size={16} variant="Bold" color="currentColor" />
                 </span>
                 <span className="bento-label">Season</span>
@@ -866,6 +898,7 @@ function ProjectTabs({ tabs, activeKey, titleFor, onSelect, onClose, onAdd, side
 function EmptyState({ meta, form, done, total, status, message, onFillSample }) {
   const checks = [
     { key: 'season', label: 'Season', done: Boolean(form.season) },
+    { key: 'state', label: 'State', done: Boolean(form.state) },
     { key: 'soil', label: 'Soil type', done: Boolean(form.soil) },
     { key: 'water_source', label: 'Water source', done: Boolean(form.water_source) },
     ...meta.fields.map((f) => ({ key: f.key, label: f.label, done: form[f.key] !== '' })),
@@ -1207,7 +1240,7 @@ const DATA_PAGE = 80;
 
 const DATA_HEADERS = {
   crop: 'Crop',
-  type: 'Type',
+  state: 'State',
   soil: 'Soil',
   season: 'Season',
   water: 'Water',
@@ -1217,13 +1250,10 @@ const DATA_HEADERS = {
   pH: 'pH',
   temp: 'Temp °C',
   RH: 'RH %',
-  water_mm: 'Water mm',
-  days: 'Days',
-  sown: 'Sown',
-  harvest: 'Harvest',
+  rain_mm: 'Rain mm',
 };
 
-const DATA_NUM_COLS = new Set(['N', 'P', 'K', 'pH', 'temp', 'RH', 'water_mm', 'days']);
+const DATA_NUM_COLS = new Set(['N', 'P', 'K', 'pH', 'temp', 'RH', 'rain_mm']);
 
 function DatasetModal({ meta, onClose }) {
   const titleRef = useRef(null);
@@ -1290,7 +1320,7 @@ function DatasetModal({ meta, onClose }) {
             <h2 id="data-modal-title" ref={titleRef} tabIndex={-1}>
               Raw data
             </h2>
-            <p className="crop-modal-sub">Tamil Nadu crop recommendation dataset · {meta.rows.toLocaleString()} rows</p>
+            <p className="crop-modal-sub">India multi-state training set · {meta.rows.toLocaleString()} rows · 16 states</p>
           </div>
           <button type="button" className="crop-modal-close" onClick={onClose} aria-label="Close raw data">
             <CloseCircle size={22} variant="Bold" color="currentColor" />
@@ -1349,9 +1379,7 @@ function DatasetModal({ meta, onClose }) {
                     <tr key={`${offset}-${i}`}>
                       {payload.columns.map((col) => {
                         let value = row[col];
-                        if (col === 'crop') value = meta.crops[row.crop]?.name ?? row.crop;
-                        else if (col === 'type') value = meta.crops[row.crop]?.type ?? row.type;
-                        else if (col === 'season' || col === 'water') value = String(row[col]).replace(/^./, (c) => c.toUpperCase());
+                        if (col === 'season' || col === 'water') value = String(row[col]).replace(/^./, (c) => c.toUpperCase());
                         return (
                           <td key={col} className={DATA_NUM_COLS.has(col) ? 'is-num' : undefined}>
                             {value}

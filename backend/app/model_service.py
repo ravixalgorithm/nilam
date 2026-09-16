@@ -11,90 +11,72 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-from .schemas import NUMERIC_FIELDS, SEASONS, SOIL_TYPES, WATER_SOURCES
+from .india_ref import CROP_META, MONTHS, crop_slug, month_span
+from .schemas import NUMERIC_FIELDS, SEASONS, SOIL_TYPES, STATE_NAMES, WATER_SOURCES
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_PATH = BASE_DIR / "data" / "tamilnadu_crops.csv"
+DATA_PATH = BASE_DIR / "data" / "india_crops.csv"
 MODELS_DIR = BASE_DIR / "models"
-MODEL_PATH = MODELS_DIR / "crop_model_tamilnadu_v1.joblib"
+MODEL_PATH = MODELS_DIR / "crop_model_india_v1.joblib"
 
 NUMERIC = [col for col, *_ in NUMERIC_FIELDS.values()]
-CATEGORICAL = ["soil", "season", "water_source"]
-TARGET = "CROPS"
-
-# Dataset labels -> readable names (Tamil Nadu local names get their common English name).
-CROP_NAMES = {
-    "bengalgram": "Bengal gram", "blackgram": "Black gram", "greengram": "Green gram", "redgram": "Red gram",
-    "horsegram": "Horse gram", "bhendi": "Okra", "gingely": "Sesame", "tapoica": "Tapioca",
-    "chowchow": "Chow chow", "kudiraivali": "Barnyard millet", "panivaragu": "Proso millet",
-    "samai": "Little millet", "thinai": "Foxtail millet", "varagu": "Kodo millet", "soyabean": "Soybean",
-    "ragi": "Ragi (finger millet)", "Root&tuber": "Root & tuber",
-}
-CROP_TYPES = {
-    "cereals": "Cereal", "millets": "Millet", "pulses": "Pulse", "oil seeds": "Oilseed", "vegetables": "Vegetable",
-    "colecrops": "Cole crop", "bulbvegetables": "Bulb vegetable", "Root&tuber": "Root & tuber",
-    "sugar crops": "Sugar crop", "fibre crop": "Fibre crop",
-}
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-
-def soil_group(raw: str) -> str:
-    """Collapse the dataset's 34 inconsistent soil labels into the 9 types the API accepts."""
-    s = raw.replace("\xa0", " ").strip().lower()
-    for key, group in [("alluvial", "Alluvial"), ("black", "Black"), ("cotton", "Black"), ("laterit", "Laterite"),
-                       ("red", "Red"), ("clay", "Clay"), ("sandy loam", "Sandy loam"), ("sandy", "Sandy"),
-                       ("loam", "Loamy")]:
-        if key in s:
-            return group
-    return "Other"
+CATEGORICAL = ["soil", "season", "state"]
+TARGET = "crop"
 
 
 def load_dataset() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH)
-    df["soil"] = df["SOIL"].map(soil_group)
-    df["season"] = df["SEASON"].str.lower()
-    df["water_source"] = df["WATER_SOURCE"].str.lower()
+    df["soil"] = df["soil_type"].astype(str).str.strip()
+    df.loc[~df["soil"].isin(SOIL_TYPES), "soil"] = "Other"
+    df["season"] = df["season"].astype(str).str.strip().str.lower()
+    df["state"] = df["state"].astype(str).str.strip()
+    df["crop"] = df["crop"].map(crop_slug)
+    # Soft label for UI / raw viewer (not a model feature)
+    df["water_source"] = df["rainfall"].map(lambda r: "rainfed" if float(r) >= 900 else "irrigated")
     return df
 
 
-def month_indexes(series: pd.Series) -> list[int]:
-    """0-based months (Jan=0) seen for a crop, in calendar order."""
-    return sorted({MONTHS.index(m) for m in series.str.strip().str[:3].str.title()})
-
-
 def build_metadata(df: pd.DataFrame) -> dict:
-    def month_span(series: pd.Series) -> str:
-        months = sorted(series.str.strip().str[:3].str.title().unique(), key=MONTHS.index)
-        return months[0] if len(months) == 1 else f"{months[0]}–{months[-1]}"
-
     crops = {}
     for crop, g in df.groupby(TARGET):
+        meta = CROP_META.get(crop, {})
+        name = meta.get("name") or crop[:1].upper() + crop[1:]
+        sow = meta.get("sow") or [5, 6]
+        harvest = meta.get("harvest") or [8, 9]
+        soils = g["soil"].value_counts(normalize=True).loc[lambda s: s >= 0.08].index.tolist()
         crops[crop] = {
-            "name": CROP_NAMES.get(crop, crop[:1].upper() + crop[1:]),
-            "type": CROP_TYPES.get(g["TYPE_OF_CROP"].iloc[0], g["TYPE_OF_CROP"].iloc[0]),
-            "season": g["season"].iloc[0],
-            "duration_days": int(round(g["CROPDURATION"].median())),
-            "sown": month_span(g["SOWN"]),
-            "harvested": month_span(g["HARVESTED"]),
-            "sow_months": month_indexes(g["SOWN"]),
-            "harvest_months": month_indexes(g["HARVESTED"]),
-            "soils": g["soil"].value_counts(normalize=True).loc[lambda s: s >= 0.1].index.tolist(),
+            "name": name,
+            "type": meta.get("type", "Crop"),
+            "season": meta.get("season") or g["season"].mode().iloc[0],
+            "duration_days": int(meta.get("days") or 120),
+            "sown": month_span(sow),
+            "harvested": month_span(harvest),
+            "sow_months": list(sow),
+            "harvest_months": list(harvest),
+            "soils": soils or ["Alluvial"],
             "water_source": g["water_source"].mode().iloc[0],
-            # [p10, median, p90] per numeric input: the "typical" band shown in the UI
+            "states": g["state"].value_counts().head(8).index.tolist(),
             "profile": {
                 key: [round(float(g[col].quantile(q)), 1) for q in (0.1, 0.5, 0.9)]
                 for key, (col, *_) in NUMERIC_FIELDS.items()
             },
         }
+
     fields = [
         {"key": key, "label": label, "unit": unit, "min": lo, "max": hi, "step": step}
         for key, (_, label, unit, lo, hi, step) in NUMERIC_FIELDS.items()
     ]
     return {
         "fields": fields,
-        "options": {"soil": SOIL_TYPES, "season": SEASONS, "water_source": WATER_SOURCES},
+        "options": {
+            "soil": list(SOIL_TYPES),
+            "season": list(SEASONS),
+            "water_source": list(WATER_SOURCES),
+            "state": list(STATE_NAMES),
+        },
         "crops": crops,
         "rows": len(df),
+        "coverage": "16 Indian states · multi-state synthetic training set",
     }
 
 
@@ -130,7 +112,10 @@ class CropModelService:
         model.fit(x_train, y_train)
         self.metrics = {
             "accuracy": round(float(model.score(x_test, y_test)), 4),
-            "top3_accuracy": round(float(top_k_accuracy_score(y_test, model.predict_proba(x_test), k=3, labels=model.classes_)), 4),
+            "top3_accuracy": round(
+                float(top_k_accuracy_score(y_test, model.predict_proba(x_test), k=3, labels=model.classes_)),
+                4,
+            ),
             "test_rows": len(x_test),
         }
         joblib.dump({"model": model, "metrics": self.metrics}, MODEL_PATH, compress=3)
@@ -142,7 +127,7 @@ class CropModelService:
 
         view = self.df
         if crop:
-            view = view[view[TARGET] == crop]
+            view = view[view[TARGET] == crop_slug(crop)]
 
         total = len(view)
         limit = max(1, min(limit, 200))
@@ -150,34 +135,37 @@ class CropModelService:
         page = view.iloc[offset : offset + limit]
 
         columns = [
-            ("CROPS", "crop"),
-            ("TYPE_OF_CROP", "type"),
+            ("crop", "crop"),
+            ("state", "state"),
             ("soil", "soil"),
             ("season", "season"),
             ("water_source", "water"),
             ("N", "N"),
             ("P", "P"),
             ("K", "K"),
-            ("SOIL_PH", "pH"),
-            ("TEMP", "temp"),
-            ("RELATIVE_HUMIDITY", "RH"),
-            ("WATERREQUIRED", "water_mm"),
-            ("CROPDURATION", "days"),
-            ("SOWN", "sown"),
-            ("HARVESTED", "harvest"),
+            ("ph", "pH"),
+            ("temperature", "temp"),
+            ("humidity", "RH"),
+            ("rainfall", "rain_mm"),
         ]
 
         rows = []
         for _, r in page.iterrows():
-            rows.append({
-                key: (round(float(r[col]), 1) if isinstance(r[col], (int, float)) and not isinstance(r[col], bool) else str(r[col]))
-                for col, key in columns
-            })
+            item = {}
+            for col, key in columns:
+                val = r[col]
+                if key == "crop":
+                    item[key] = CROP_META.get(str(val), {}).get("name", str(val))
+                elif isinstance(val, (int, float)) and not isinstance(val, bool):
+                    item[key] = round(float(val), 1)
+                else:
+                    item[key] = str(val)
+            rows.append(item)
 
         return {
             "columns": [key for _, key in columns],
             "rows": rows,
-            "total": total,
+            "total": int(total),
             "limit": limit,
             "offset": offset,
             "crop": crop,
