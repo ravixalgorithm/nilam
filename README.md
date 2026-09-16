@@ -1,256 +1,209 @@
-# Hybrid Farm Support System
+# NILAM
 
-This repository contains a complete full-stack crop recommendation system for the Hybrid Farm Support System:
+**Crop recommendation for Tamil Nadu fields** — enter soil and climate readings, get ranked crop fits with confidence, calendars, and growing profiles.
 
-- A machine learning notebook and dataset
-- A FastAPI backend that predicts crops from soil/weather inputs
-- A React frontend for user-friendly prediction
+<p align="center">
+  <img src="docs/dashboard.png" alt="NILAM dashboard — rice analysis with confidence, crop ranking, and field readings" width="100%" />
+</p>
 
-The app takes the following inputs:
+<p align="center">
+  <a href="https://github.com/ravixalgorithm/nilam"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-ravixalgorithm%2Fnilam-0e0e10?style=flat-square" /></a>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white" />
+  <img alt="License data" src="https://img.shields.io/badge/Dataset-CC%20BY%204.0-lightgrey?style=flat-square" />
+</p>
 
-- Soil: `N`, `P`, `K`, `ph`, and `soil` type (Alluvial, Black, Clay, Laterite, Loamy, Red, Sandy, Sandy loam, Other)
-- Climate and water: `temperature` (°C), `humidity` (%), `water` (seasonal water, mm), `season` (kharif, rabi, zaid), `water_source` (irrigated, rainfed)
+---
 
-And returns:
+## Overview
 
-- Best recommended crop out of 57 crops
-- Top 3 crop recommendations with confidence
-- Each crop's growing profile (typical ranges, season, duration, sowing and harvest months), served by `GET /metadata`
+NILAM is a full-stack advisor for matching a field’s conditions to crops. A Random Forest model trained on **57 crops / 57,000 rows** of Tamil Nadu agricultural data ranks candidates from NPK, pH, temperature, humidity, seasonal water, soil type, season, and water source.
 
-## Dataset
+The UI is built like a floated desktop app: dark sidebar, Chrome-style tabs, hatch-framed metric shells, live rankings, and a raw dataset viewer.
 
-The model is trained on the **Crop recommendation dataset for Tamil Nadu** (57,000 rows, 57 crops, 1,000 rows per crop):
-Mendeley Data, [doi:10.17632/vynxnppr7j.1](https://data.mendeley.com/datasets/vynxnppr7j/1), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The data is synthetic: it was generated with CTGAN from Tamil Nadu agriculture references, so treat accuracy figures as a demo, not field validation.
+**Docs:** [Project documentation](docs/PROJECT.md) · [UI design system](frontend/DESIGN.md)
 
-Preprocessing in `backend/app/model_service.py`:
+| Layer | Stack |
+|-------|--------|
+| Frontend | React 18, Vite, Iconsax, Plus Jakarta Sans |
+| Backend | FastAPI, scikit-learn, pandas, joblib |
+| Model | RandomForest (200 trees), one-hot soil / season / water source |
+| Data | Tamil Nadu crop recommendation set ([Mendeley](https://data.mendeley.com/datasets/vynxnppr7j/1), CC BY 4.0) |
 
-- The 34 raw soil labels are merged into 9 soil types.
-- The `*_MAX` columns and per-crop attributes (crop type, duration, sowing and harvest months) are **not** used as inputs, because each one identifies the crop. They are shown in the UI as crop facts instead.
-- The model is a RandomForest (200 trees) with one-hot encoded soil, season and water source. Held-out accuracy is 99.3% and top-3 accuracy is 100% (see `GET /model-info`).
+> **Note:** The training set is synthetic (CTGAN from regional references). Reported accuracy is for demo / coursework — not field validation.
 
-The original 22-crop dataset (`backend/data/Crop_recommendation.csv`) is kept for reference but no longer used.
+---
 
-## Repository Structure
+## Features
 
-```text
-Hybrid Farm Support System/
-|-- backend/
-|   |-- app/
-|   |   |-- main.py
-|   |   |-- model_service.py
-|   |   |-- schemas.py
-|   |   `-- __init__.py
-|   |-- data/
-|   |   `-- Crop_recommendation.csv
-|   |-- models/
-|   `-- requirements.txt
-|-- frontend/
-|   |-- src/
-|   |   |-- App.jsx
-|   |   |-- main.jsx
-|   |   `-- styles.css
-|   |-- index.html
-|   |-- package.json
-|   `-- vite.config.js
-|-- notebooks/
-|   `-- Crop_Recommendation_Testing_Final.ipynb
-|-- .gitignore
-`-- README.md
-```
+- **Live recommendations** — results update as soon as every reading is set  
+- **Confidence & fit** — top pick with %, reading marks, soil match, sow/harvest window  
+- **Crop ranking** — model pick first, then same-season crops scored by how many readings sit in typical range  
+- **Growing calendar** — sow / grow / harvest months per crop  
+- **Field panel** — season, soil chips, craft sliders for nutrients & climate  
+- **Saved analyses** — sidebar history (browser `localStorage`)  
+- **Raw data viewer** — open **57 crops · 57,000 records** for a paginated look at training rows  
+- **Design system** — see [`frontend/DESIGN.md`](frontend/DESIGN.md)
 
-## Prerequisites
+---
 
-Install these before running:
+## Quick start
 
-1. Python 3.10+
-2. Node.js 18+ and npm
-3. Git
+### Prerequisites
 
-## 1) Clone the Repository
+- Python **3.10+**
+- Node.js **18+** and npm
+- Git
+
+### Clone
 
 ```bash
-git clone https://github.com/dikshantahlawat/B.Tech_Project.git
-cd B.Tech_Project
+git clone https://github.com/ravixalgorithm/nilam.git
+cd nilam
 ```
 
-## 2) Fastest Demo Start (Windows)
-
-If you want to show it quickly to your teacher, use the one-click launcher:
-
-1. Double-click `start_all.bat` from the repository root.
-2. It opens two terminals automatically:
-	- Backend on `http://127.0.0.1:8000`
-	- Frontend on `http://127.0.0.1:5173`
-3. Open the app in browser: `http://127.0.0.1:5173`
-
-You can also launch each side separately:
-
-- `start_backend.bat`
-- `start_frontend.bat`
-
-## 3) Run Backend (FastAPI)
-
-Open terminal 1:
+### Backend
 
 ```bash
 cd backend
 python -m venv .venv
-```
-
-Activate environment:
-
-- Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-- Windows CMD:
-
-```cmd
-.venv\Scripts\activate.bat
-```
-
-- macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Start backend server:
+On first run the API trains (or loads) the model and writes `backend/models/`.
 
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+| URL | Purpose |
+|-----|---------|
+| http://127.0.0.1:8000/docs | Swagger |
+| http://127.0.0.1:8000/health | Health |
+| http://127.0.0.1:8000/metadata | Fields, options, crop profiles |
+| http://127.0.0.1:8000/model-info | Metrics & feature list |
+| http://127.0.0.1:8000/dataset | Paginated raw rows |
 
-Backend URLs:
-
-- API base: `http://127.0.0.1:8000`
-- Health check: `http://127.0.0.1:8000/health`
-- Swagger docs: `http://127.0.0.1:8000/docs`
-
-Note:
-
-- On first startup, the backend auto-trains and saves a RandomForest model from `backend/data/Crop_recommendation.csv` if no saved model is found.
-
-## 4) Run Frontend (React + Vite)
-
-Open terminal 2:
+### Frontend
 
 ```bash
 cd frontend
 npm install
+npm run dev
 ```
 
-Create `.env` file in `frontend/` (optional, default already points to localhost):
+Open **http://127.0.0.1:5173**
+
+Optional `frontend/.env`:
 
 ```env
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Run frontend:
+### Windows one-click
 
-```bash
-npm run dev
-```
+From the repo root: `start_all.bat` (or `start_backend.bat` / `start_frontend.bat`).
 
-Open:
+---
 
-- `http://127.0.0.1:5173`
+## How to use
 
-## 5) Use the Web App
+1. Click **New analysis** (or use a sample tile such as Rice on the empty state).  
+2. Set **season**, **soil**, **water source**, and drag/type each nutrient & climate reading.  
+3. Watch the left workspace: confidence bento, calendar, and ranked crop list.  
+4. Open a crop for profile detail; save from the tab flow to keep it in the sidebar.  
+5. Click the footer **57 crops · 57,000 records** to browse training data.
 
-1. The dashboard opens with a sample rice field. Click **New analysis** in the sidebar to start from a blank input panel.
-2. Set each reading on its solid bar: click or drag anywhere on the bar, use the arrow keys, or type the number at the right end. Pick soil type, season and water source. **Fill with sample** loads an example field.
-3. Results update live once every value is set:
-	 - Summary cards: recommended crop and confidence, readings in range, growing window, soil match
-	 - Crops for this field: the model's pick, then same-season crops ranked by readings in their typical range, each with a sow, grow and harvest calendar and a pass/fail mark per reading
-	 - Click a crop to see its facts and what to change, for example "Add about 12 N"
-4. Name the analysis in the top bar and click **Save result**. Saved results are listed in the sidebar (stored in this browser's localStorage). Click one to reopen it, or hover and click × twice to delete it.
+---
 
-## 6) Notebook
+## API
 
-Notebook is included at (it explores the original 22-crop dataset):
-
-- `notebooks/Crop_Recommendation_Testing_Final.ipynb`
-
-Open this notebook in Jupyter/VS Code to review EDA, model experiments, and tuning work.
-
-## API Example
-
-### Request
+### Predict
 
 `POST /predict`
 
 ```json
 {
-	"N": 90,
-	"P": 50,
-	"K": 50,
-	"ph": 6.5,
-	"temperature": 30,
-	"humidity": 70,
-	"water": 1700,
-	"soil": "Clay",
-	"season": "kharif",
-	"water_source": "irrigated"
+  "N": 90,
+  "P": 50,
+  "K": 50,
+  "ph": 6.5,
+  "temperature": 30,
+  "humidity": 70,
+  "water": 1705,
+  "soil": "Alluvial",
+  "season": "kharif",
+  "water_source": "irrigated"
 }
 ```
-
-### Response
 
 ```json
 {
-	"best_crop": "rice",
-	"top_recommendations": [
-		{ "crop": "rice", "confidence": 0.99 },
-		{ "crop": "cotton", "confidence": 0.004 },
-		{ "crop": "jute", "confidence": 0.001 }
-	]
+  "best_crop": "rice",
+  "top_recommendations": [
+    { "crop": "rice", "confidence": 0.99 },
+    { "crop": "sorghum", "confidence": 0.01 }
+  ]
 }
 ```
 
-## macOS / Linux quick start
+Soil values: `Alluvial`, `Black`, `Clay`, `Laterite`, `Loamy`, `Red`, `Sandy`, `Sandy loam`, `Other`  
+Season: `kharif`, `rabi`, `zaid` · Water: `irrigated`, `rainfed`
 
-The pinned packages need Python 3.10+. If your system Python is older, [uv](https://docs.astral.sh/uv/) can create the environment:
+---
 
-```bash
-cd backend
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python train_model.py        # optional: startup trains automatically if no model exists
-.venv/bin/uvicorn app.main:app --reload --port 8000
+## Model & data
 
-cd ../frontend
-npm install
-npm run dev
+| Item | Detail |
+|------|--------|
+| Dataset | 57 crops × 1,000 rows (Tamil Nadu crop recommendation) |
+| Features | N, P, K, soil pH, temp, RH, seasonal water, soil, season, water source |
+| Held-out | ~99.3% accuracy · 100% top-3 (see `GET /model-info`) |
+| Preprocessing | 34 soil labels → 9 groups; crop identity columns not used as inputs |
+
+Source: [doi:10.17632/vynxnppr7j.1](https://data.mendeley.com/datasets/vynxnppr7j/1) (CC BY 4.0).  
+Reference CSV `backend/data/Crop_recommendation.csv` (22-crop classic set) is kept for the notebook only.
+
+Exploration notebook: [`notebooks/Crop_Recommendation_Testing_Final.ipynb`](notebooks/Crop_Recommendation_Testing_Final.ipynb)
+
+---
+
+## Repository layout
+
+```text
+nilam/
+├── backend/
+│   ├── app/                 # FastAPI + model service
+│   ├── data/                # Tamil Nadu CSV (+ legacy CSV)
+│   ├── models/              # joblib artifact (generated)
+│   └── requirements.txt
+├── frontend/
+│   ├── src/                 # React app (App, Slider, styles)
+│   ├── DESIGN.md            # UI craft / design system
+│   └── package.json
+├── docs/
+│   ├── dashboard.png        # README screenshot
+│   └── PROJECT.md           # Detailed architecture & API docs
+├── notebooks/
+├── start_*.bat
+└── README.md
 ```
 
-After changing the dataset or preprocessing, delete `backend/models/*.joblib` to retrain.
+---
 
-## Troubleshooting
+## Design
 
-1. `ModuleNotFoundError` in backend:
-	 - Activate virtual environment
-	 - Run `pip install -r backend/requirements.txt`
+Interface language (tokens, chrome, hatch shells, bento, motion) is documented in **[frontend/DESIGN.md](frontend/DESIGN.md)** so new screens stay consistent with NILAM.
 
-2. Frontend cannot reach backend:
-	 - Ensure backend is running on port `8000`
-	 - Ensure `VITE_API_BASE_URL` points to backend URL
+---
 
-3. CORS issues:
-	 - Backend already enables CORS for development (`allow_origins=["*"]`)
+## License & attribution
 
-## Future Improvements
+Application code in this repository is provided for education and demonstration.
 
-- User authentication for saved predictions
-- Deployment with Docker and cloud hosting
-- Better explainability dashboard for feature impact
-- Periodic retraining pipeline
+Training data © contributors of the Tamil Nadu crop recommendation dataset on Mendeley, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+---
+
+<p align="center">
+  <strong>NILAM</strong> · land · field · fit
+</p>
